@@ -1,0 +1,466 @@
+from PIL import Image
+import numpy as np
+import numpy.linalg as la
+import math
+import visual_map
+import watershed
+
+"""
+# creates mask that blocks the centre and extremities of fourier transform
+# leaving only city block scale signal
+def fourier_mask(shape):
+
+  # read dimensions of image to create mask for
+  x_pix = int(shape[0])
+  y_pix = int(shape[1])
+
+  print('input image has dimensions of x = %d and y = %d') % (x_pix, y_pix)
+
+  # set size of mask (circular shape)
+  mask_inner_radius = x_pix / 13
+  mask_outer_radius = x_pix / 4
+  x_cent = x_pix / 2
+  y_cent = y_pix / 2
+
+  # initialising zeroed array to hold mask
+  f_mask = np.zeros((x_pix, y_pix))
+
+  # cycling over all pixels in the zeroed array
+  for x in xrange(0, x_pix):
+    for y in xrange(0, y_pix):
+      r = math.sqrt((x - x_cent) ** 2 + (y - y_cent) ** 2)
+
+      # setting circular region larger than mask_inner_radius and less than 
+      # mask_outer_radius to 1, all other regions of array left at 0
+      if ((r > mask_inner_radius) & (r < mask_outer_radius)):
+        f_mask[x][y] = 1
+
+  # mask saved as image for debugging purposes, maybe remove?
+  img = Image.fromarray(np.uint8(f_mask))
+  img.save('./images/mask.png')
+  print('mask saved to disk')
+
+  return f_mask
+
+
+def threshold_tweak(ftrans, max_peak, peaks):
+
+  thresh_step = 0.0001
+
+  # setting threshold values to iterate over
+  thresh_iter = np.arange(0.001, 0.2, thresh_step)
+
+
+  for thresh in thresh_iter:
+    ftrans_temp = ftrans
+    ftrans_temp[ftrans_temp < (max_peak * thresh)] = 0
+
+    # uncomment to make function verbose
+    #print('%d non zero pixels detected at threshold of %f %% of peak value') \
+      % (np.count_nonzero(ftrans_temp), thresh * 100)
+      
+    if(np.count_nonzero(ftrans_temp) == peaks):
+      print('%d peaks found when the threshhold = %f %% of the max peak \
+        intensity') % (peaks, thresh * 100)
+      return ftrans_temp
+
+    if(np.count_nonzero(ftrans_temp) < peaks):
+      print('threshold iteration has skipped over %d peak values, try again \
+        with a finer threshold step') % peaks
+
+      return 0
+
+  print('no good threshold found, sorry...')
+
+  return 0
+
+
+# extracts the angle of inclination of the chip from a filtered 2dfft
+def find_angle(clean_fft, peaks):
+
+  args = np.zeros((peaks, 2))
+
+  # fills array args up with the indicies of non zero pixels
+  for peak in xrange(0, peaks):
+      args[peak]  = np.unravel_index(np.argmax(clean_fft), np.shape(clean_fft))
+
+      print('peak %d has intensity of %f') % (peak + 1, np.amax(clean_fft))
+      print('and position of [%d, %d]') % (args[peak][0], args[peak][1])
+
+      clean_fft[int(args[peak][0])][int(args[peak][1])] = 0
+
+  # claculate vector between two identified pixels
+  vector = np.zeros(2)
+  vector[0] = args[0][0] - args[1][0]
+  vector[1] = args[0][1] - args[1][1]
+
+  #finding magnitude of vector
+  vec_mag = math.sqrt(vector[0] ** 2 + vector[1] ** 2)
+
+  print('vec_mag = %f') % vec_mag
+
+  # setting reference vertical vector
+  vert_vect = np.array([0, 1])
+
+  #computing angle between calculated and reference vector
+  angle = vector_angle(vector, vert_vect)
+
+  deg_angle = angle * 360 / (2 * math.pi)
+  print('angle = %f degrees before quadrant correction') % deg_angle
+
+  # finding quadrant in which the calculated angle is closest to reference values of
+  # 0, pi/2, pi and (3 * pi) / 4
+  quadrant_angles = np.array([0.0, math.pi / 2.0, math.pi, - math.pi / 2.0])
+  quadrant_delta = np.array([0.0, 0.0, 0.0, 0.0])
+
+  for quadrant in xrange(0,4):
+    quadrant_delta[quadrant] = angle - quadrant_angles[quadrant]
+
+  quadrant = int(np.argmin(np.fabs(quadrant_delta)))
+
+  angle = quadrant_delta[quadrant]
+  
+  deg_angle = angle * 360 / (2 * math.pi)
+  print('chip is rotated  %f degrees counter clockwise') % deg_angle
+
+  return angle, vec_mag
+
+# returns the angle in radians between vectors v1 and v2
+def vector_angle(v1, v2):
+
+  cosang = np.dot(v1, v2)
+  sinang = la.norm(np.cross(v1, v2))
+
+  return np.arctan2(sinang, cosang)
+
+
+# attempts to determine the orientation of a chip image 
+# (clockwise rotation in radians)
+def orient(filename):
+
+  img_array = np.asarray(Image.open(filename).convert('L'))
+  print('image loaded')
+
+  shape = np.shape(img_array)
+
+  # performing fourier transform
+  ftrans = np.fft.fft2(img_array)
+
+  # gets mask for fourier transform
+  f_mask = fourier_mask(shape)
+
+  # sets peak intensity to be at the centre of the image
+  ftrans = np.fft.fftshift(ftrans)
+
+  # determine peak of fourier transform
+  max_peak = np.max(np.abs(ftrans))
+
+  # convolve mask with fourier data
+  masked_ftrans = ftrans * f_mask
+
+  # image of mask loaded into image and saved
+  img = Image.fromarray(np.uint8(masked_ftrans))
+  img.save('./images/masked_ftrans.png')
+  print('masked ftrans saved')
+
+  # number of peaks that the threshold will be tweaked to find (2 by default),
+  # different angle determination method required
+  # with more than 2 peaks
+  peaks = 2
+
+  masked_ftrans = threshold_tweak(masked_ftrans, max_peak, peaks)
+
+  # log scale data
+  abs_data = 1 + np.abs(masked_ftrans)
+  c = 255.0 / np.log(1 + max_peak)
+  log_data = c * np.log(abs_data)
+
+  # array loaded into image and saved
+  img = Image.fromarray(np.uint8(log_data))
+  img.save('./images/orient.png')
+  print('image saved to disk')
+
+  theta, vec_mag = find_angle(log_data, peaks)
+
+  return theta, vec_mag
+
+"""
+
+def rotate(x, y, theta, rot_matrix):
+  col_vec = np.zeros((2))
+  col_vec[0] = x
+  col_vec[1] = y
+  col_vec = np.dot(rot_matrix, col_vec)
+
+  return col_vec[0], col_vec[1]
+
+
+# generates a mask from the theoretical layout of a chip
+def mask_gen(x_pix_max, y_pix_max, cell_real_size,
+  x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
+
+  # final cell index
+  i_max = 11664
+
+  i_half = 5832
+
+  # initializing mask array
+  mask = np.zeros((x_pix_max, y_pix_max))
+
+  cell_pix_size = int(cell_real_size * pix_scale) # width of cell in pixels
+
+  # location of cells in terms of image pixels
+  X_pix = (X + x_real_offset) * pix_scale
+  Y_pix = (Y + y_real_offset) * pix_scale
+
+  x_mid = X_pix[i_half]
+  y_mid = Y_pix[i_half]
+
+  rot_matrix = np.zeros((2, 2))
+  rot_matrix[0][0] = math.cos(theta)
+  rot_matrix[1][1] = math.cos(theta)
+  rot_matrix[1][0] = - math.sin(theta)
+  rot_matrix[0][1] = math.sin(theta)
+
+  # accounting for x, y shift of the middle of mask so rotation only takes 
+  # place around centre of chip
+  x, y = rotate(x_mid, y_mid, theta, rot_matrix)
+  delt_x = x - x_mid
+  delt_y = y - y_mid
+
+  for i in xrange(0, i_max):
+    for r_x in xrange(-cell_pix_size, cell_pix_size):
+      for r_y in xrange(-cell_pix_size, cell_pix_size):
+        x = int(X_pix[i] + r_x) # temporary x
+        y = int(Y_pix[i] + r_y) # temporary y
+
+        x, y = rotate(x, y, theta, rot_matrix)
+
+        # correcting for non centred rotation
+        x = int(x - delt_x)
+        y = int(y - delt_y)
+
+        if(x >= 0 and x < x_pix_max and y >= 0 and y < y_pix_max):
+            mask[x,y] = Z[i]
+
+  mask = np.flipud(mask)
+  mask = np.rot90(mask, 3)
+
+  #img = Image.fromarray(np.uint8(mask))
+  #img.save('./images/mask_test.png')
+
+  return mask
+
+
+# convolves mask with selected image
+def convolve(img_array, x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
+  y_real_offset, pix_scale, theta, X, Y, Z):
+
+  # creating mask to convolve with image
+  mask = mask_gen(x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
+    y_real_offset, pix_scale, theta, X, Y, Z)
+
+  # convolving mask with image
+  img_array = img_array * mask
+  
+  return img_array
+
+
+# returns the index of an iterable given its value
+def index(value, min, step):
+  print(value)
+  I = int(round((value - min) / step) - 1)
+
+  return I
+
+
+# returns the value of an iterable for a given index
+def de_index(I, min, step):
+  value = ((I + 1) * step) + min
+
+  return value
+
+
+# Search mask generation parameter space to find optimal fitting
+def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
+  real_trans_step_x, real_trans_step_y):
+
+  # stops searching of space outside of this zone
+  x_hard_min = 10.5
+  x_hard_max = 13.5
+  y_hard_min = -5
+  y_hard_max = 4
+
+  # opening image and converting to greyscale
+  img_array = np.asarray(Image.open(filename).convert('L'))
+
+  # making array readable
+  img_array.flags.writeable = True
+
+  # filter out high value noise
+  img_array[img_array >= 255] = 0
+
+  X, Y, Z = visual_map.main() # get real space position of cells on chip
+
+  Z[Z == 2] = 0
+  Z[Z == 7] = 0
+  Z[Z == 4] = 1
+
+  # get angle and vector magnitude
+  #theta, vec_mag = orient(filename)
+
+  # get fitting information from feature recognition code
+  # format of angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
+  data = watershed.error_minimize(filename)
+
+  theta = - math.radians(data[0])
+  pix_scale = data[2]f
+
+  print('theta = %f rads') % theta
+  print('pix scale = %f pixels per mm') % pix_scale
+
+  # size of image
+  x_pix_max = 1292
+  y_pix_max = 964
+
+  cell_real_size =  0.05 # width of cell in mm, default 0.05
+
+  # values to iterate x_real_offset and y_real_offset over
+  x_r_off_iter = np.arange(x_r_off_min, x_r_off_max, real_trans_step_x)
+  y_r_off_iter = np.arange(y_r_off_min, y_r_off_max, real_trans_step_y)
+
+  # calculating number of solutions
+  ind_x_max = 1 + index(x_r_off_max, x_r_off_min, real_trans_step_x)
+  ind_y_max = 1 + index(y_r_off_max, y_r_off_min, real_trans_step_y)
+
+  print('ind_x_max = %d, ind_y_max = %d') % (ind_x_max, ind_y_max)
+
+  sums = np.zeros((ind_x_max, ind_y_max))
+
+  sums_elements = ind_x_max * ind_y_max
+  print(sums_elements)
+
+  sum_current = 0
+
+  for x_real_offset in x_r_off_iter:
+    for y_real_offset in y_r_off_iter:
+
+      if((x_real_offset > x_hard_min) & (x_real_offset < x_hard_max) & (y_real_offset > y_hard_min) & (y_real_offset < y_hard_max)):
+
+        sum_current = np.sum(convolve(img_array, x_pix_max, y_pix_max, \
+          cell_real_size, x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z))
+
+      ind_x = index(x_real_offset, x_r_off_min, real_trans_step_x)
+      ind_y = index(y_real_offset, y_r_off_min, real_trans_step_y)
+
+      sums[ind_x, ind_y] = sum_current - 1000
+
+  np.save('sums.npy', sums)
+  
+  max_element_value = np.amax(sums)
+
+  # returns the indicies of the sums element with the highest value 
+  i, j = np.unravel_index(sums.argmax(), sums.shape)
+
+  x_real_offset = de_index(i, x_r_off_min, real_trans_step_x)
+  y_real_offset = de_index(j, y_r_off_min, real_trans_step_y)
+
+  print('%f pixels per mm, x offset of %f mm and y offset of %f mm') % \
+    (pix_scale, x_real_offset, y_real_offset)
+
+  # calculating and displaying the convolution of the best fit mask with the input image
+  img_array = convolve(img_array, x_pix_max, y_pix_max, cell_real_size, \
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+
+  img = Image.fromarray(np.uint8(img_array))
+  img.show()
+  
+  img.save('./images/test_fit.png')
+
+  # returns best fit mask generation parameters and image data
+  return img_array, pix_scale, x_real_offset, y_real_offset, theta
+
+def meta_sweep(filename):
+  # stores the steps, real_trans_step_x, real_trans_step_y
+  sweep_data = np.zeros((5, 3))
+
+  # size of search area in second sweep 
+  steps_2 = 5
+  real_trans_step_2 = 0.125
+
+  # size of search area in third sweep 
+  steps_3 = 7
+  real_trans_step_3 = 0.0125
+
+  # size of search area in fourth sweep
+  steps_4 = 10
+  real_trans_step_4 = 0.125
+
+  # size of search area in fifth sweep
+  steps_5 = 3
+  real_trans_step_x_5 = 2.2
+  real_trans_step_y_5 = 2.5 
+
+  sweep_data = [[0, 0, 0],[steps_2, real_trans_step_2, real_trans_step_2], \
+    [steps_3, real_trans_step_3, real_trans_step_3],[steps_4, real_trans_step_4, \
+    real_trans_step_4],[steps_5, real_trans_step_x_5, real_trans_step_y_5]]
+
+  # setting x and y offset iteration parameters (mm)
+  x_r_off_min = 10.5
+  x_r_off_max = 13
+
+  y_r_off_min = 1.5
+  y_r_off_max = 4
+
+  # translational offset iteration step (mm), 0.125 is spacing between cells
+  real_trans_step_1 = 0.25
+
+for sweep_num in xrange(1,6):
+  img_array, pix_scale, x_real_offset, y_real_offset, theta = (
+    sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, 
+    sweep_data[sweep_num][1], sweep_data[sweep_num][2]))
+
+  x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
+  x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
+
+  y_r_off_min = y_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
+  y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
+
+
+  img_array, pix_scale, x_real_offset, y_real_offset, theta = (
+  sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, 
+  real_trans_step, real_trans_step))
+
+  real_trans_step = real_trans_step_3
+  x_r_off_min = x_real_offset - steps_3 * real_trans_step 
+  x_r_off_max = x_real_offset + steps_3 * real_trans_step
+
+  y_r_off_min = y_real_offset - steps_3 * real_trans_step 
+  y_r_off_max = y_real_offset + steps_3 * real_trans_step
+
+  img_array, pix_scale, x_real_offset, y_real_offset, theta = (
+  sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, 
+  real_trans_step, real_trans_step))
+
+  real_trans_step = real_trans_step_4
+  x_r_off_min = x_real_offset - steps_4 * real_trans_step 
+  x_r_off_max = x_real_offset + steps_4 * real_trans_step
+
+  y_r_off_min = y_real_offset - steps_4 * real_trans_step 
+  y_r_off_max = y_real_offset + steps_4 * real_trans_step
+
+  img_array, pix_scale, x_real_offset, y_real_offset, theta = (
+  sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, 
+  real_trans_step, real_trans_step))
+
+  x_r_off_min = x_real_offset - steps_5 * real_trans_step_x_5 
+  x_r_off_max = x_real_offset + steps_5 * real_trans_step_x_5
+
+  y_r_off_min = y_real_offset - steps_5 * real_trans_step_y_5
+  y_r_off_max = y_real_offset + steps_5 * real_trans_step_y_5
+
+  img_array, pix_scale, x_real_offset, y_real_offset, theta = (
+  sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, 
+  real_trans_step_x_5, real_trans_step_y_5))
+
+  return img_array, pix_scale, x_real_offset, y_real_offset, theta
