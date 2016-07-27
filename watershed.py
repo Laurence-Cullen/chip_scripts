@@ -77,41 +77,29 @@ def output(pix_scale_hor, pix_scale_ver, angle_hor, angle_ver, hor_neigh_count, 
 
 	angle_disagreement = math.sqrt((angle_hor_mean - angle_ver_mean)**2)
 
-	#print(angle_hor)
-	#print('break')
-	#print(angle_ver)
-
-	#print('mean horizontal angle of %f degrees') % angle_hor_mean
-	#print('mean vertical angle of %f degrees') % angle_ver_mean
-	#print('angle disagreement of %f degrees') % angle_disagreement
-	#print('mean angle of %f degrees') % angle_mean
-
-	#print('horizontal pix scale of %f pixels per mm') % pix_scale_hor_mean
-	#print('vertical pix scale of %f pixels per mm') % pix_scale_ver_mean
-	#print('pix scale disagreement of %f %%') % (pix_scale_disagreement * 100)
-	#print('weighted mean pix_scale of %f pixels per mm') % pix_scale_mean
-
 	return angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err
 
-def error_minimize(filename):
+def error_minimize(filename, mode=0):
 	# iterates over values of C to find the best angle and pix_scale disagreement
 	max_C = 15
 	length = 2 * max_C
-	min_rects = 12
+	min_good_rects = 10
 
-	# angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count 
+	# angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count, cent_cords
+	# good_rect_log
 	data_out = np.zeros((5, length))
 
 	for C in xrange(-max_C, max_C):
 		data_out[0][C + max_C], data_out[1][C + max_C], data_out[2][C + max_C], \
-			data_out[3][C + max_C], data_out[4][C + max_C] = main(filename, C)
-		if(data_out[4][C + max_C] < min_rects):
+			data_out[3][C + max_C], data_out[4][C + max_C], cent_cords, good_rect_log = main(filename, C)
+
+		if(np.count_nonzero(good_rect_log) < min_good_rects):
 			data_out[1][C + max_C] = float('nan')
 			data_out[3][C + max_C] = float('nan')
 
-
 	angle_std_err = data_out[1,:]
 	pix_scale_std_err = data_out[3,:]
+	rects = data_out[4,:]
 
 	ang_weight = 1 / np.nanmean(angle_std_err)
 	pix_weight = 1 / np.nanmean(pix_scale_std_err)
@@ -119,38 +107,32 @@ def error_minimize(filename):
 	avrg_err = (angle_std_err * ang_weight + pix_scale_std_err * pix_weight) / \
 		(ang_weight + pix_weight)
 
-	#print('angle errors:')
-	#print(angle_std_err)
-	
-	#print('pixel scale errors:')
-	#print(pix_scale_std_err)
-
-	#print('average error:')
-	#print(avrg_err)
-
 	min_angle_err_C = np.nanargmin(angle_std_err) - max_C
 	min_pix_err_C = np.nanargmin(pix_scale_std_err) - max_C
 	min_avrg_err_c = np.nanargmin(avrg_err) - max_C
+	max_rects_C = np.nanargmax(rects) - max_C
 
-	#print('minimum angle error found when C = %d of %f') % (min_angle_err_C, \
-	#	angle_std_err[min_angle_err_C + max_C])
+	if(mode == 0):
+		C = min_avrg_err_c
+	elif(mode == 1):
+		C = max_rects_C
+	else:
+		print('error, incorrect mode, must be either 0 or 1')
+		return 0
 
-	#print('angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count')
-	#print(data_out[:,min_angle_err_C + max_C])
+	data = data_out[:,C + max_C]
 
-	#print('minimum pixel scale error found when C = %d of %f') % (min_pix_err_C, \
-	#	pix_scale_std_err[min_pix_err_C + max_C])
-	#print('angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count')
-	#print(data_out[:,min_pix_err_C + max_C])
+	data_out[0][C + max_C], data_out[1][C + max_C], data_out[2][C + max_C], \
+		data_out[3][C + max_C], data_out[4][C + max_C], cent_cords, good_rect_log = main(filename, C)
+		
 
-	#print('overall error minimum found when C = %d with an average error of %f') \
-	# % (min_avrg_err_c, avrg_err[min_avrg_err_c + max_C])
+	print('best C = ')
+	print(min_avrg_err_c)
 
-	data = data_out[:,min_avrg_err_c + max_C]
+	return data, cent_cords, good_rect_log
 
-	return data
-
-def main(filename, C):
+# when flag == '-p' image threshold and fitted rectangles will be displayed
+def main(filename, C, flag='-n'):
 
 	# thresholding parameters, iterate over C perhaps, strong effect on angle disagreement
 	#C = -10 # background subtraction when thresholding, 2 reccomended value
@@ -160,7 +142,7 @@ def main(filename, C):
 	# rectangle sifting parameters
 	min_area = 2500.0 # 2500 - 2700 default
 	max_area = 3700.0 # 3700 default
-	max_side_ratio = 1.1
+	max_side_ratio = 1.1 # max accepted value of longer side divided by shorter side
 
 	# spacing of city blocks in mm
 	horizontal_spacing = 2.2
@@ -196,7 +178,7 @@ def main(filename, C):
 
 	#thresh = np.invert(thresh)
 
-	#saving hard copy of thresh to avoid damage from findcontours
+	# saving hard copy of thresh to avoid damage from findcontours
 	thresh_perm = np.copy(thresh)
 
 	# find array of contours
@@ -220,10 +202,6 @@ def main(filename, C):
 
 	# cycle over contours
 	for i in xrange(0,length):
-		#epsilon = 0.1*cv2.arcLength(cnts[i],True)
-		#approx = cv2.approxPolyDP(cnts[i],epsilon,True)
-		#approx_shape = np.shape(approx)
-		#print(approx_shape)
 
 		rect = cv2.minAreaRect(cnts[i])
 		box = cv2.cv.BoxPoints(rect)
@@ -272,16 +250,10 @@ def main(filename, C):
 
 				cent_cords = np.vstack((cent_cords, cent_cords_vec))
 
-				#cent_cords[i][0] = box[0][0] - delt_x
-				#cent_cords[i][1] = box[0][1] - delt_y
-
-				#print('centre of rectangle at (%d, %d)') % (cent_cords[i][0], cent_cords[i][1])
-
 				cv2.circle(open_cv_image, (int(cent_cords[count][0]), \
 					int(cent_cords[count][1])), 40, (B * 255, G * 255, R * 255), 2)
 
 				#cv2.drawContours(open_cv_image,[box],0,(0,0,255),2)
-
 
 	closest_neighbours = find_neighbours(cent_cords, count)
 
@@ -301,9 +273,11 @@ def main(filename, C):
 	pix_scale_hor = []
 	pix_scale_ver = []
 
-	# recording the angles of connections between neightbouring points
+	# recording the angles of connections between neighbouring points
 	angle_hor = []
 	angle_ver = []
+
+	good_rect_log = np.zeros(count)
 
 	# iterating over starting point
 	for s_p in xrange(1,count):
@@ -312,6 +286,8 @@ def main(filename, C):
 			if((closest_neighbours[s_p,neighbour,2] > 75) & \
 				(closest_neighbours[s_p,neighbour,2] < 84)):
 				
+				good_rect_log[s_p] = 1
+
 				pix_scale_hor.append(closest_neighbours[s_p,neighbour,2] \
 					/ horizontal_spacing)
 
@@ -326,6 +302,8 @@ def main(filename, C):
 			if((closest_neighbours[s_p,neighbour,2] > 88) & \
 				(closest_neighbours[s_p,neighbour,2] < 94)):
 				
+				good_rect_log[s_p] = 1
+
 				pix_scale_ver.append(closest_neighbours[s_p,neighbour,2] / \
 				 vertical_spacing)
 
@@ -341,20 +319,27 @@ def main(filename, C):
 		output(pix_scale_hor, pix_scale_ver, angle_hor, angle_ver, \
 		hor_neigh_count, ver_neigh_count)
 
-	#print(closest_neighbours)
+	# if -p is given as a flag output is printed
+	if(flag == '-p'):
 
-	#print('%d rectangles drawn') % count
+		print(cent_cords)
 
-	#filename = ('./vision/adaptive_test_kern_%d.png') % kern_dims
+		print('%d rectangles drawn') % count
 
-	#image = Image.fromarray(open_cv_image)
-	#image.save(filename)
-	#print('image saved to disk')
+		#filename = ('./vision/adaptive_test_kern_%d.png') % kern_dims
 
-	#cv2.imshow('city block centres', thresh_perm)
-	#cv2.imshow('city block centres', open_cv_image)
+		#image = Image.fromarray(open_cv_image)
+		#image.save(filename)
+		#print('image saved to disk')
 
-	#if cv2.waitKey(0) & 0xff == 27:
-	#    cv2.destroyAllWindows()
+		cv2.imshow('city block centres', thresh_perm)
+		#cv2.imshow('city block centres', open_cv_image)
 
-	return angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
+		if cv2.waitKey(0) & 0xff == 27:
+		    cv2.destroyAllWindows()
+
+	# angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count, cent_cords
+	# good_rect_log
+	#data_out = [angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count, cent_cords, good_rect_log]
+
+	return angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count, cent_cords, good_rect_log

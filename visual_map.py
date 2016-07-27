@@ -53,6 +53,7 @@ def hits_scrape(fid, diamond_dict):
         hits_dict[diamond_dict[i]] = yesno 
     return hits_dict 
 
+# valid for data collection in June 2016
 def collect_dicts():
     road_list = ['A','B','C','D','E','F','G','H','I']
     daor_list = ['I','H','G','F','E','D','C','B','A']
@@ -63,15 +64,14 @@ def collect_dicts():
     ordr_list = []
     addr_dict = {}
     ordr_dict = {}
+
     i = 0
     for c in range(9):
-        print('c') % c 
         for r in range(9):
-            print 'r', r 
             for wc in range(12):
                 #print
                 for wr in range(12):
-                    if (r % 2 == 0):
+                    if (c % 2 == 0):
                         if (wc % 2 == 0):
                             #addr = daor_list[r] + sorc_list[c] + '_' + dniw_list[wc] + dniw_list[wr]
                             addr = daor_list[r] + sorc_list[c] + '_' + dniw_list[wc] + dniw_list[wr]
@@ -85,12 +85,12 @@ def collect_dicts():
                     else:
                         if (wc % 2 == 0):
                             #addr = daor_list[r] + cros_list[c] + '_' + wind_list[wc] + dniw_list[wr]
-                            addr = daor_list[r] + cros_list[c] + '_' + wind_list[wc] + dniw_list[wr]
+                            addr = road_list[r] + sorc_list[c] + '_' + wind_list[wc] + dniw_list[wr]
                             ordr_list.append(addr)
                             #print addr,'3',
                         else:
                             #addr = daor_list[r] + cros_list[c] + '_' + wind_list[wc] + wind_list[wr]
-                            addr = daor_list[r] + cros_list[c] + '_' + wind_list[wc] + wind_list[wr]
+                            addr = road_list[r] + sorc_list[c] + '_' + wind_list[wc] + wind_list[wr]
                             ordr_list.append(addr)
                             #print addr,'4',
                     addr_dict[addr] = i
@@ -145,6 +145,8 @@ def get_xy(xtal_name):
     w2w = 0.125
     b2b_horz = 0.825
     b2b_vert = 1.125
+    #b2b_horz = 0
+    #b2b_vert = 0
     cell_format = [9, 9, 12, 12]
     entry = xtal_name.split('_')[-2:]
     R, C = entry[0][0], entry[0][1]
@@ -178,8 +180,6 @@ def main():
     X = np.array(x_list)
     Y = np.array(y_list)
     Z = np.array(z_list)
-
-    """
     xr = X.ravel()
     yr = Y.ravel()
     zr = Z.ravel()
@@ -194,7 +194,7 @@ def main():
     ax1.set_ylim(yr.min()-0.2, yr.max()+0.2)
     ax1.invert_yaxis()
     plt.savefig('chip_image.png', dpi=600, bbox_inches='tight', pad_inches=0.05)
-    """
+    
     return X, Y, Z
 
 if __name__ == '__main__':
