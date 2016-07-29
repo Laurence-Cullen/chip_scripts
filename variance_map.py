@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from PIL import Image
+from numba import jit
+import cv2
 
 """
 This script takes the local standard deviation of an image and saves it to
@@ -15,13 +17,41 @@ def main(filename, box_size):
 	x_pix_max = shape[0]
 	y_pix_max = shape[1]
 
-	std_dev_map = np.zeros((x_pix_max, y_pix_max))
-
 	#box_size = 3 # default value of 3
 	box_length = (2 * box_size) + 1
 
+	std_dev_map = process(img, box_length, box_size, x_pix_max, y_pix_max)
+
+	std_dev_map = np.asarray(std_dev_map)
+
+	std_dev_map = np.uint8(std_dev_map)
+
+	thresh = np.zeros((x_pix_max, y_pix_max))
+
+	thresh_value = np.percentile(std_dev_map, 80)
+
+	std_dev_map[std_dev_map >= 255] = 255
+	std_dev_map[std_dev_map < thresh_value] = 0
+
+
+	std_dev_map = np.uint8(std_dev_map)
+
+	std_dev_img = Image.fromarray(np.uint8(std_dev_map))
+
+	filename_out = ('./images/std_dev_map.png')
+
+  	std_dev_img.save(filename_out)
+  	print('standard deviation map saved')
+
+  	return std_dev_map
+
+
+@jit(nopython=True)
+def process(img, box_length, box_size, x_pix_max, y_pix_max):
+
+	std_dev_map = np.zeros((x_pix_max, y_pix_max))
+
 	for x in xrange(0, x_pix_max):
-		print('x = %d') % x
 		for y in xrange(0, y_pix_max):
 
 			box = np.zeros((box_length, box_length))
@@ -38,10 +68,4 @@ def main(filename, box_size):
 				else:
 					std_dev_map[x][y] = 0
 
-	print(std_dev_map)
-
-	std_dev_img = Image.fromarray(np.uint8(std_dev_map))
-  	std_dev_img.save('./images/std_dev_map.png')
-  	print('standard deviation map saved')
-
-  	return std_dev_map
+	return std_dev_map

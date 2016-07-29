@@ -336,15 +336,15 @@ def smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max):
 def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     real_trans_step_x, real_trans_step_y, cell_real_size, \
     X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
-    pix_scale, theta, sweep_type=0):
+    pix_scale, theta, std_dev_map, sweep_type=0):
 
     print('in sweep')
 
     # stops searching of space outside of this zone
     x_hard_min = 8.0
     x_hard_max = 15.0
-    y_hard_min = -4.0
-    y_hard_max = 5.0
+    y_hard_min = 0
+    y_hard_max = 4.8
 
     # size of image
     #x_pix_max = 1292
@@ -360,7 +360,6 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     print('after shape')
 
     real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
-    std_dev_box_size = 3
 
     #img = Image.fromarray(np.uint8(img_array))
     #img.save('./images/smart_clean_test.png')
@@ -397,16 +396,9 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
             if((x_real_offset > x_hard_min) & (x_real_offset < x_hard_max) & \
                 (y_real_offset > y_hard_min) & (y_real_offset < y_hard_max)):
 
-                print('generating mask')
-
                 # creating mask of chip
                 chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
                     y_real_offset, pix_scale, theta, X, Y, Z)
-
-                print('mask generated')
-
-                print(np.shape(img_array))
-                print(np.shape(chip_mask))
 
                 # convolving chip mask with image
                 chip_conv_img_array = img_array * chip_mask
@@ -415,7 +407,8 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
                 # sweep using a larger cell size and against the good rect mask to
                 # ensure a good city block match
                 if(sweep_type == 1):
-                    print('generating mask with sweep type 1')
+
+                    print('beginning sweep type 1')
 
                     # convolving chip mask convolved image with known city block mask
                     conv_rect_img_array = chip_conv_img_array * rect_mask
@@ -424,30 +417,18 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
                     print('%d non zero pixels') % non_zero_pixels
 
                     # loading array into image and saving
-                    img = Image.fromarray(np.uint8(conv_rect_img_array))
-                    imname = ('./images/%f_%f.png') % (round(x_real_offset, 4), round(y_real_offset, 4))
-
-                    img.save(imname)
+                    #img = Image.fromarray(np.uint8(conv_rect_img_array))
+                    #imname = ('./images/%f_%f.png') % (round(x_real_offset, 4), round(y_real_offset, 4))
+                    #img.save(imname)
 
                     sum_current_rect = np.sum(conv_rect_img_array)
-
-                # sweep against standard deviation map to try and get a good city block match
-                elif(sweep_type == 2):
-                    print('generating mask with sweep type 2')
 
                     # convolving std_dev_map with rect_mask to overcome background emission 
                     conv_std_dev_img_array = std_dev_map * rect_mask
 
-                    # convolving chip mask convolved image with known city block mask
-                    conv_rect_img_array = chip_conv_img_array * rect_mask
-
-                    # loading array into image and saving
-                    img = Image.fromarray(np.uint8(conv_std_dev_img_array))
-                    imname = ('./images/std_dev_map%f_%f.png') % (round(x_real_offset, 4), round(y_real_offset, 4))
-
-                    img.save(imname)
-
                     sum_current_std_dev = np.sum(conv_std_dev_img_array)
+
+                    print(sum_current_std_dev)
 
 
             ind_x = index(x_real_offset, x_r_off_min, real_trans_step_x)
@@ -455,17 +436,25 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
             sums[ind_x, ind_y] = sum_current
 
-            sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 15000.0) * sum_current + (1.0 / 200) * sum_current_std_dev
+            # edit for different weighting!
+            #sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 15000.0) * sum_current + (1.0 / 200) * sum_current_std_dev
+            sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 200) * sum_current_std_dev
 
             print('sum current = %f') % sums[ind_x, ind_y]
             print('sum_omni = %f') % sums_omni[ind_x, ind_y]
     
     if(sweep_type == 1):
+
+        print('determining best fit from sweep type 1')
+
         # returns the indicies of the sums element with the highest value 
         i, j = np.unravel_index(sums_omni.argmax(), sums_omni.shape)
 
+        print(i, j)
+
         x_real_offset = de_index(i, x_r_off_min, real_trans_step_x)
         y_real_offset = de_index(j, y_r_off_min, real_trans_step_y)
+
 
         print('%f pixels per mm, x offset of %f mm and y offset of %f mm') % \
             (pix_scale, x_real_offset, y_real_offset)
@@ -474,7 +463,11 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
 
+        print('finished chip generation')
+
         img_array = img_array * chip_mask * rect_mask
+
+        print('img array convolved ')
 
         # loading array into image and saving
         img = Image.fromarray(np.uint8(img_array))
@@ -482,6 +475,11 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         img.save('./images/type1_fit.png')
 
     elif(sweep_type == 0):
+
+        print('sweep_type = %d') % sweep_type
+
+        print('determining best fit from sweep type 0')
+
         # returns the indicies of the sums element with the highest value 
         i, j = np.unravel_index(sums.argmax(), sums.shape)
 
@@ -496,12 +494,18 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
 
+        print('after chip mask')
+
         img_array = img_array * chip_mask
+
+        print('after image convolution')
 
         img = Image.fromarray(np.uint8(img_array))
         img.show()
         
         img.save('./images/type0_fit.png')
+
+        print('image saved')
 
     # returns best fit mask generation parameters and image data
     return img_array, pix_scale, x_real_offset, y_real_offset, theta
@@ -537,9 +541,10 @@ def meta_sweep(filename, filename_out):
     print('theta = %f rads') % theta
     print('pix scale = %f pixels per mm') % pix_scale
 
-
     real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
-    std_dev_box_size = 3
+    std_dev_box_size = 2
+
+    std_dev_map = variance_map.main(filename, std_dev_box_size)
 
     img_shape = np.shape(img_array)
 
@@ -559,10 +564,10 @@ def meta_sweep(filename, filename_out):
 
     img_array_perm = smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max)
 
-
     # loading array into image and saving
     smart_clean_img = Image.fromarray(np.uint8(img_array_perm))
     smart_clean_img.save('./images/smart_clean.png')
+
 
 
     # default cell radius (mm)
@@ -602,16 +607,19 @@ def meta_sweep(filename, filename_out):
             sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
             sweep_data[sweep_num - 1][1], sweep_data[sweep_num -1][2], cell_real_size, \
             X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
-            pix_scale, theta, sweep_type)
+            pix_scale, theta, std_dev_map, sweep_type)
+
+        print('after sweep of sweep_num %d of sweep_type %d') % (sweep_num, sweep_type)
 
 
-        i_list = read_out(img_array, cell_real_size, \
-        x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+        # BEWARE CAUSING SEGFAULT!
+        %%%%%%%%%%%%%%%
+        #i_list = read_out(img_array, cell_real_size, \
+        #x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+        #np.savetxt(filename_out, i_list)
+        #print('i_list.txt saved')
+        %%%%%%%%%%%%%%%
 
-        np.savetxt(filename_out, i_list)
-
-        print('i_list.txt saved')
-        
         if(sweep_num <= sweep_num_max - 2 ):
             x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
             x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
