@@ -12,7 +12,6 @@ def main(pre_load_log_filename, post_load_log_filename):
     intensity_log_pre_load = intensity_log_pre_load / np.mean(intensity_log_pre_load)
     intensity_log_post_load = intensity_log_post_load / np.mean(intensity_log_post_load)
 
-
     j_max = 11664
 
     pre_length = np.size(intensity_log_pre_load)

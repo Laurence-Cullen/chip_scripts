@@ -5,8 +5,9 @@ import math
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import random
+from numba import jit
 
-
+@jit#(nopython=True)
 def find_neighbours(cent_cords, count):
 
 	# calculating the distance from every good rect centre to every other 
@@ -54,28 +55,15 @@ def find_neighbours(cent_cords, count):
 	return closest_neighbours
 
 
-def output(pix_scale_hor, pix_scale_ver, angle_hor, angle_ver, hor_neigh_count, \
+def output(pix_scale_omni, angle_omni, hor_neigh_count, \
 	 ver_neigh_count):
-	pix_scale_omni = np.asarray(pix_scale_hor + pix_scale_ver)
 	pix_scale_std_err = np.std(pix_scale_omni) / math.sqrt(pix_scale_omni.size)
 
-	pix_scale_hor_mean = np.mean(pix_scale_hor)
-	pix_scale_ver_mean = np.mean(pix_scale_ver)
-	pix_scale_mean = (pix_scale_ver_mean * ver_neigh_count + pix_scale_hor_mean \
-		* hor_neigh_count) / (hor_neigh_count + ver_neigh_count)
+	pix_scale_mean = np.mean(pix_scale_omni)
 
-	pix_scale_disagreement = math.sqrt((pix_scale_hor_mean - \
-		pix_scale_ver_mean)**2) / (pix_scale_mean)
-
-	angle_omni = np.asarray(angle_hor + angle_ver)
 	angle_std_err = np.std(angle_omni) / math.sqrt(angle_omni.size)
 
-	angle_hor_mean = np.mean(angle_hor)
-	angle_ver_mean = np.mean(angle_ver)
-	angle_mean = (angle_hor_mean * hor_neigh_count + angle_ver_mean * \
-		ver_neigh_count) / (hor_neigh_count + ver_neigh_count)
-
-	angle_disagreement = math.sqrt((angle_hor_mean - angle_ver_mean)**2)
+	angle_mean = np.mean(angle_omni)
 
 	return angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err
 
@@ -130,6 +118,7 @@ def error_minimize(filename, mode=0):
 	print(min_avrg_err_c)
 
 	return data, cent_cords, good_rect_log
+
 
 # when flag == '-p' image threshold and fitted rectangles will be displayed
 def main(filename, C, flag='-n'):
@@ -315,8 +304,12 @@ def main(filename, C, flag='-n'):
 
 				ver_neigh_count += 1
 
+
+	pix_scale_omni = np.asarray(pix_scale_hor + pix_scale_ver)
+	angle_omni = np.asarray(angle_hor + angle_ver)
+
 	angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err = \
-		output(pix_scale_hor, pix_scale_ver, angle_hor, angle_ver, \
+		output(pix_scale_omni, angle_omni, \
 		hor_neigh_count, ver_neigh_count)
 
 	# if -p is given as a flag output is printed

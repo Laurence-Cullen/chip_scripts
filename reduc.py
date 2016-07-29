@@ -5,6 +5,9 @@ import math
 import visual_map
 import watershed
 import variance_map
+import os
+from numba import jit
+
 
 """
 # creates mask that blocks the centre and extremities of fourier transform
@@ -187,6 +190,7 @@ def orient(filename):
 
 """
 
+@jit(nopython=True)
 def rotate(x, y, rot_matrix):
     col_vec = np.zeros((2))
     col_vec[0] = x
@@ -200,6 +204,25 @@ def rotate(x, y, rot_matrix):
 def chip_mask_gen(x_pix_max, y_pix_max, cell_real_size,
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
 
+    print('in chip mask')
+
+    chip_mask = chip_mask_crunch(x_pix_max, y_pix_max, cell_real_size,
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+
+    print('chip_mask_crunch complete')
+
+    chip_mask = np.flipud(chip_mask)
+    chip_mask = np.rot90(chip_mask, 3)
+
+    print('chip_mask_gen complete')
+
+    return chip_mask
+
+
+@jit(nopython=True)
+def chip_mask_crunch(x_pix_max, y_pix_max, cell_real_size,
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
+    
     # final cell index
     i_max = 11664
 
@@ -211,9 +234,14 @@ def chip_mask_gen(x_pix_max, y_pix_max, cell_real_size,
     cell_pix_size_float = cell_real_size * pix_scale # width of cell in pixels
     cell_pix_size_int = int(math.ceil(cell_pix_size_float))
 
+    X_pix = np.zeros(i_max)
+    Y_pix = np.zeros(i_max)
+
     # location of cells in terms of image pixels
-    X_pix = np.around((X + x_real_offset) * pix_scale)
-    Y_pix = np.around((Y + y_real_offset) * pix_scale)
+    for i in xrange(0,11664):
+
+        X_pix[i] = round((X[i] + x_real_offset) * pix_scale)
+        Y_pix[i] = round((Y[i] + y_real_offset) * pix_scale)
 
     x_mid = X_pix[i_half]
     y_mid = Y_pix[i_half]
@@ -246,28 +274,19 @@ def chip_mask_gen(x_pix_max, y_pix_max, cell_real_size,
                     y = int(round(y - delt_y))
 
                     if(x >= 0 and x < x_pix_max and y >= 0 and y < y_pix_max):
-                            mask[x,y] = Z[i]
-
-    mask = np.flipud(mask)
-    mask = np.rot90(mask, 3)
-
-    #img = Image.fromarray(np.uint8(mask))
-    #img.save('./images/mask_test.png')
+                            mask[int(x)][int(y)] = Z[int(i)]
 
     return mask
 
 
+@jit(nopython=True)
 def rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect_log, cent_cords):
 
     pix_circ_rad = int(round(real_circ_rad * pix_scale))
 
     mask = np.zeros((x_pix_max, y_pix_max))
 
-    shape = np.shape(good_rect_log)
-
-    length = int(shape[0])
-
-    print('starting loop')
+    length = good_rect_log.size
 
     for count in xrange(1, length):
         for x in xrange(-pix_circ_rad, pix_circ_rad):
@@ -282,41 +301,26 @@ def rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect
 
                             mask[cent_cords[count][0] + x][cent_cords[count][1] + y] = 1.0
 
-    # correcting for orientation
-    mask = np.flipud(mask)
-    mask = np.rot90(mask, 3)
-
-    print('finished loop')
-    img = Image.fromarray(np.uint8(mask * 200))
-    img.save('./images/rect_mask_test.png')
-    print('mask saved to disk')
     return mask
 
 
-# convolves mask with selected image
-def convolve(img_array, mask, x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
-    y_real_offset, pix_scale, theta, X, Y, Z):
-
-    # convolving mask with image
-    img_array = img_array * mask
-    
-    return img_array
-
-
 # returns the index of an iterable given its value
+@jit(nopython=True)
 def index(value, min, step):
-    print(value)
     I = int(round((value - min) / step) - 1)
 
     return I
 
 
 # returns the value of an iterable for a given index
+@jit(nopython=True)
 def de_index(I, min, step):
     value = ((I + 1) * step) + min
 
     return value
 
+
+@jit(nopython=True)
 def smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max):
 
     for x in xrange(0, y_pix_max):
@@ -324,84 +328,61 @@ def smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max):
             if((rect_mask[x][y] <= 0.5) & (img_array[x][y] >= 255)):
                 img_array[x][y] = 0
 
-    img = Image.fromarray(np.uint8(img_array))
-    img.save('./images/smart_clean_test.png')
-    print('smart_clean_test saved')
-
     return img_array
 
+
 # Search mask generation parameter space to find optimal fitting
+@jit
 def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
-    real_trans_step_x, real_trans_step_y, cell_real_size, sweep_type=0):
+    real_trans_step_x, real_trans_step_y, cell_real_size, \
+    X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
+    pix_scale, theta, sweep_type=0):
+
+    print('in sweep')
 
     # stops searching of space outside of this zone
     x_hard_min = 8.0
     x_hard_max = 15.0
-    y_hard_min = -2.0
+    y_hard_min = -4.0
     y_hard_max = 5.0
 
-    # opening image and converting to greyscale
-    img_array = np.asarray(Image.open(filename).convert('L'))
-
-    # making array readable
-    img_array.flags.writeable = True
-
-    X, Y, Z = visual_map.main() # get real space position of cells on chip
-
-    Z[Z == 2] = 0
-    Z[Z == 7] = 0
-    Z[Z == 4] = 1
-
-    # get angle and vector magnitude
-    #theta, vec_mag = orient(filename)
-
-    # get fitting information from feature recognition code
-    # format of angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
-    # getting fit which gives lowest pixel scale and angle erro
-    data, cent_cords_null, good_rect_log_null = watershed.error_minimize(filename, 0)
-
-    # getting fit which yields highest number of rectangles
-    data_null, cent_cords, good_rect_log = watershed.error_minimize(filename, 1)
-
-    #print('cent cords = ')
-    #print(cent_cords)
-
-    #print('good rect log = ')
-    #print(good_rect_log)
-
-    theta = - math.radians(data[0])
-    pix_scale = data[2]
-
-    print('theta = %f rads') % theta
-    print('pix scale = %f pixels per mm') % pix_scale
-
     # size of image
-    x_pix_max = 1292
-    y_pix_max = 964
+    #x_pix_max = 1292
+    #y_pix_max = 964
+
+    print('before shape')
+
+    img_shape = np.shape(img_array)
+
+    x_pix_max = img_shape[0]
+    y_pix_max = img_shape[1]
+
+    print('after shape')
 
     real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
     std_dev_box_size = 3
 
-    rect_mask = rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect_log, cent_cords)
-
-    img_array = smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max)
+    #img = Image.fromarray(np.uint8(img_array))
+    #img.save('./images/smart_clean_test.png')
+    #print('smart_clean_test saved')
 
     # values to iterate x_real_offset and y_real_offset over
     x_r_off_iter = np.arange(x_r_off_min, x_r_off_max, real_trans_step_x)
     y_r_off_iter = np.arange(y_r_off_min, y_r_off_max, real_trans_step_y)
 
+    print('iterables created')
+
     # calculating number of solutions
     ind_x_max = 1 + index(x_r_off_max, x_r_off_min, real_trans_step_x)
     ind_y_max = 1 + index(y_r_off_max, y_r_off_min, real_trans_step_y)
 
-    print('ind_x_max = %d, ind_y_max = %d') % (ind_x_max, ind_y_max)
+    print('calculating array dimension sizes')
 
     sums = np.zeros((ind_x_max, ind_y_max))
     sums_omni = np.zeros((ind_x_max, ind_y_max))
+    conv_std_dev_img_array = np.zeros((x_pix_max, y_pix_max))
 
-    # calculating how many masks will need to be generated
-    sums_elements = ind_x_max * ind_y_max
-    print(sums_elements)
+    print('about to start loop')
 
 
     # iterating over x and y offset values for chip mask
@@ -413,15 +394,19 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
             non_zero_pixels = 0
             sum_current_std_dev = 0
 
-
             if((x_real_offset > x_hard_min) & (x_real_offset < x_hard_max) & \
                 (y_real_offset > y_hard_min) & (y_real_offset < y_hard_max)):
 
                 print('generating mask')
 
                 # creating mask of chip
-                chip_mask = chip_mask_gen(x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
+                chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
                     y_real_offset, pix_scale, theta, X, Y, Z)
+
+                print('mask generated')
+
+                print(np.shape(img_array))
+                print(np.shape(chip_mask))
 
                 # convolving chip mask with image
                 chip_conv_img_array = img_array * chip_mask
@@ -470,7 +455,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
             sums[ind_x, ind_y] = sum_current
 
-            sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 200.0) * sum_current + (1.0 / 200) * sum_current_std_dev
+            sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 15000.0) * sum_current + (1.0 / 200) * sum_current_std_dev
 
             print('sum current = %f') % sums[ind_x, ind_y]
             print('sum_omni = %f') % sums_omni[ind_x, ind_y]
@@ -486,7 +471,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
             (pix_scale, x_real_offset, y_real_offset)
 
         # calculating and displaying the convolution of the best fit mask with the input image
-        chip_mask = chip_mask_gen(x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
+        chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
 
         img_array = img_array * chip_mask * rect_mask
@@ -508,9 +493,9 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
         # calculating and displaying the convolution of the best fit mask with the input image
 
-        chip_mask = chip_mask_gen(x_pix_max, y_pix_max, cell_real_size, x_real_offset, \
+        chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
-        
+
         img_array = img_array * chip_mask
 
         img = Image.fromarray(np.uint8(img_array))
@@ -521,7 +506,69 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     # returns best fit mask generation parameters and image data
     return img_array, pix_scale, x_real_offset, y_real_offset, theta
 
-def meta_sweep(filename):
+@jit
+def meta_sweep(filename, filename_out):
+
+    X, Y, Z = visual_map.main() # get real space position of cells on chip
+
+    # opening image and converting to greyscale
+    img_array = np.asarray(Image.open(filename).convert('L'))
+
+    # making array readable
+    img_array.flags.writeable = True
+
+    X, Y, Z = visual_map.main() # get real space position of cells on chip
+
+    Z[Z == 2] = 0
+    Z[Z == 7] = 0
+    Z[Z == 4] = 1
+
+    # get fitting information from feature recognition code
+    # format of angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
+    # getting fit which gives lowest pixel scale and angle erro
+    data, cent_cords_null, good_rect_log_null = watershed.error_minimize(filename, 0)
+
+    # getting fit which yields highest number of rectangles
+    data_null, cent_cords, good_rect_log = watershed.error_minimize(filename, 1)
+
+    theta = - math.radians(data[0])
+    pix_scale = data[2]
+
+    print('theta = %f rads') % theta
+    print('pix scale = %f pixels per mm') % pix_scale
+
+
+    real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
+    std_dev_box_size = 3
+
+    img_shape = np.shape(img_array)
+
+    x_pix_max = img_shape[1]
+    y_pix_max = img_shape[0]
+
+    rect_mask = rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect_log, cent_cords)
+
+    # correcting for orientation
+    rect_mask = np.flipud(rect_mask)
+    rect_mask = np.rot90(rect_mask, 3)
+
+    # loading array into image and saving
+    rect_mask_img = Image.fromarray(np.uint8(rect_mask * 200))
+    rect_mask_img.save('./images/rect_mask.png')
+
+
+    img_array_perm = smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max)
+
+
+    # loading array into image and saving
+    smart_clean_img = Image.fromarray(np.uint8(img_array_perm))
+    smart_clean_img.save('./images/smart_clean.png')
+
+
+    # default cell radius (mm)
+    cell_real_size =  0.03
+
+    cell_real_size_city_block = 0.08
 
     sweep_num_max = 8
 
@@ -532,8 +579,59 @@ def meta_sweep(filename):
     y_r_off_min = 1.5
     y_r_off_max = 4
 
-    # default cell radius (mm)
-    cell_real_size =  0.03
+    # loading sweep pattern
+    sweep_data = sweep_pattern(sweep_num_max)
+
+
+    for sweep_num in xrange(1, sweep_num_max):
+        sweep_type = 0
+        print('sweep number = %d') % sweep_num
+        cell_size = cell_real_size
+
+        if(sweep_num == 5):
+            print('sweep type of 1')
+            sweep_type = 1
+            cell_size = cell_real_size_city_block
+
+        print(x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
+            sweep_data[sweep_num - 1][1], sweep_data[sweep_num - 1][2])
+
+        img_array = img_array_perm
+
+        img_array, pix_scale, x_real_offset, y_real_offset, theta = \
+            sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
+            sweep_data[sweep_num - 1][1], sweep_data[sweep_num -1][2], cell_real_size, \
+            X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
+            pix_scale, theta, sweep_type)
+
+
+        i_list = read_out(img_array, cell_real_size, \
+        x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+
+        np.savetxt(filename_out, i_list)
+
+        print('i_list.txt saved')
+        
+        if(sweep_num <= sweep_num_max - 2 ):
+            x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
+            x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
+
+            y_r_off_min = y_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
+            y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
+
+
+    i_list = read_out(img_array, cell_real_size, \
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+
+    np.savetxt(filename_out, i_list)
+
+    print('i_list.txt saved')
+
+    return img_array, pix_scale, x_real_offset, y_real_offset, theta
+
+
+@jit
+def sweep_pattern(sweep_num_max):
 
     # translational offset iteration step (mm), 0.125 is spacing between cells
     real_trans_step_1 = 0.25
@@ -554,7 +652,6 @@ def meta_sweep(filename):
     steps_5 = 3
     real_trans_step_x_5 = 2.2
     real_trans_step_y_5 = 2.5
-    cell_real_size_city_block = 0.08
 
     # size of search area in sixth sweep
     steps_6 = 5
@@ -576,68 +673,49 @@ def meta_sweep(filename):
         [steps_6, real_trans_step_x_6, real_trans_step_y_6], \
         [steps_7, real_trans_step_x_7, real_trans_step_y_7]]
 
-    for sweep_num in xrange(1, sweep_num_max):
-        sweep_type = 0
-        print('sweep number = %d') % sweep_num
-        cell_size = cell_real_size
-
-        if(sweep_num == 5):
-            print('sweep type of 1')
-            sweep_type = 1
-            cell_size = cell_real_size_city_block
-
-        print(x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
-            sweep_data[sweep_num - 1][1], sweep_data[sweep_num - 1][2])
-
-        img_array, pix_scale, x_real_offset, y_real_offset, theta = \
-            sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
-            sweep_data[sweep_num - 1][1], sweep_data[sweep_num - 1][2], cell_size, sweep_type)
-        
-        i_list = read_out(img_array, cell_real_size, \
-        x_real_offset, y_real_offset, pix_scale, theta)
-
-        np.savetxt('i_list.txt', i_list)
-
-        print('i_list.txt saved')
-
-        if(sweep_num <= sweep_num_max - 2 ):
-            x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
-            x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
-
-            y_r_off_min = y_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
-            y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
-
-
-    return img_array, pix_scale, x_real_offset, y_real_offset, theta
+    return sweep_data
 
 
 # reads out summed values for for each cell
-def read_out(img_array, cell_real_size,
-    x_real_offset, y_real_offset, pix_scale, theta):
-
-    X, Y, Z = visual_map.main() # get real space position of cells on chip
-
-    # final cell index
-    i_max = 11664
-    i_half = 5832
-
-    shape = np.shape(img_array)
-    x_pix_max = int(shape[0])
-    y_pix_max = int(shape[1])
-
-    # [cell number][total intensity, number of pixels for cell]
-    i_list = np.zeros((i_max, 2))
+@jit
+def read_out(img_array, cell_real_size, \
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
 
     # putting image array into correct frame
     img_array = np.rot90(img_array, 1) # maybe
     img_array = np.flipud(img_array)
 
+    i_list = read_out_crunch(img_array, cell_real_size, \
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
+
+    return i_list
+
+
+@jit(nopython=True)
+def read_out_crunch(img_array, cell_real_size, \
+    x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
+    
+    # final cell index
+    i_max = 11664
+    i_half = 5832
+
+    x_pix_max = 1292
+    y_pix_max = 964
+
+    # [cell number][total intensity, number of pixels for cell]
+    i_list = np.zeros((i_max, 2))
+
     cell_pix_size_float = cell_real_size * pix_scale # width of cell in pixels
     cell_pix_size_int = int(math.ceil(cell_pix_size_float))
 
+    X_pix = np.zeros(i_max)
+    Y_pix = np.zeros(i_max)
+
     # location of cells in terms of image pixels
-    X_pix = np.around((X + x_real_offset) * pix_scale)
-    Y_pix = np.around((Y + y_real_offset) * pix_scale)
+    for i in xrange(0,11664):
+
+        X_pix[i] = round((X[i] + x_real_offset) * pix_scale)
+        Y_pix[i] = round((Y[i] + y_real_offset) * pix_scale)
 
     x_mid = X_pix[i_half]
     y_mid = Y_pix[i_half]
@@ -670,7 +748,7 @@ def read_out(img_array, cell_real_size,
                     y = int(round(y - delt_y))
 
                     if(x >= 0 and x < x_pix_max * 2 and y >= 0 and y < y_pix_max * 2):
-                            i_list[i][0] = i_list[i][0] + img_array[x][y]
-                            i_list[i][1] += 1
+                            i_list[int(i)][0] = i_list[int(i)][0] + img_array[int(x)][int(y)]
+                            i_list[int(i)][1] += 1
 
     return i_list
