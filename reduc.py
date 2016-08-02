@@ -344,7 +344,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     x_hard_min = 8.0
     x_hard_max = 15.0
     y_hard_min = 0
-    y_hard_max = 4.8
+    y_hard_max = 5.2
 
     # size of image
     #x_pix_max = 1292
@@ -471,7 +471,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
         # loading array into image and saving
         img = Image.fromarray(np.uint8(img_array))
-        img.show()
+        #img.show()
         img.save('./images/type1_fit.png')
 
     elif(sweep_type == 0):
@@ -501,7 +501,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         print('after image convolution')
 
         img = Image.fromarray(np.uint8(img_array))
-        img.show()
+        #img.show()
         
         img.save('./images/type0_fit.png')
 
@@ -568,8 +568,6 @@ def meta_sweep(filename, filename_out):
     smart_clean_img = Image.fromarray(np.uint8(img_array_perm))
     smart_clean_img.save('./images/smart_clean.png')
 
-
-
     # default cell radius (mm)
     cell_real_size =  0.03
 
@@ -611,14 +609,16 @@ def meta_sweep(filename, filename_out):
 
         print('after sweep of sweep_num %d of sweep_type %d') % (sweep_num, sweep_type)
 
-
         # BEWARE CAUSING SEGFAULT!
-        %%%%%%%%%%%%%%%
+
+#################################################################
+
         #i_list = read_out(img_array, cell_real_size, \
         #x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
         #np.savetxt(filename_out, i_list)
         #print('i_list.txt saved')
-        %%%%%%%%%%%%%%%
+
+#################################################################
 
         if(sweep_num <= sweep_num_max - 2 ):
             x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
@@ -684,8 +684,8 @@ def sweep_pattern(sweep_num_max):
     return sweep_data
 
 
+# !!!!!!!!!!!!!! sometimes segfaults!
 # reads out summed values for for each cell
-@jit
 def read_out(img_array, cell_real_size, \
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
 
@@ -699,7 +699,8 @@ def read_out(img_array, cell_real_size, \
     return i_list
 
 
-@jit(nopython=True)
+# !!!!!!!!!!!!!! sometimes segfaults!
+#@jit(nopython=True)
 def read_out_crunch(img_array, cell_real_size, \
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
     
@@ -755,8 +756,10 @@ def read_out_crunch(img_array, cell_real_size, \
                     x = int(round(x - delt_x))
                     y = int(round(y - delt_y))
 
-                    if(x >= 0 and x < x_pix_max * 2 and y >= 0 and y < y_pix_max * 2):
+                    if(x >= 0 and x < x_pix_max and y >= 0 and y < y_pix_max):
                             i_list[int(i)][0] = i_list[int(i)][0] + img_array[int(x)][int(y)]
                             i_list[int(i)][1] += 1
 
+                    else:
+                         b = 2 # placeholder
     return i_list
