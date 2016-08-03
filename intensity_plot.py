@@ -4,7 +4,7 @@ import os, re, sys
 import time, math, string
 from matplotlib import pyplot as plt
 
-def main(pre_load_log_filename, post_load_log_filename):
+def main(pre_load_log_filename, post_load_log_filename, plot_save_path):
 
     intensity_log_pre_load = np.loadtxt(pre_load_log_filename)
     intensity_log_post_load = np.loadtxt(post_load_log_filename)
@@ -38,8 +38,10 @@ def main(pre_load_log_filename, post_load_log_filename):
         addr = normal_ordr_dict[j]
         x, y = visual_map.get_xy(addr)
         
-        #z = relative_intensity_log[j][0]
-        z = intensity_log_pre_load[j][0]
+        if(relative_intensity_log[j][0] >= 3):
+            z = 0
+        else:
+            z = relative_intensity_log[j][0]
 
         x_list.append(float(x))
         y_list.append(float(y))
@@ -66,7 +68,7 @@ def main(pre_load_log_filename, post_load_log_filename):
     
     plt.show
 
-    plt.savefig('relative_intensity_plot.png', dpi=600, bbox_inches='tight', pad_inches=0.05)
+    plt.savefig(plot_save_path, dpi=600, bbox_inches='tight', pad_inches=0.05)
 
 
     return 1

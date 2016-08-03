@@ -204,17 +204,11 @@ def rotate(x, y, rot_matrix):
 def chip_mask_gen(x_pix_max, y_pix_max, cell_real_size,
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
 
-    print('in chip mask')
-
     chip_mask = chip_mask_crunch(x_pix_max, y_pix_max, cell_real_size,
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
 
-    print('chip_mask_crunch complete')
-
     chip_mask = np.flipud(chip_mask)
     chip_mask = np.rot90(chip_mask, 3)
-
-    print('chip_mask_gen complete')
 
     return chip_mask
 
@@ -342,7 +336,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
     # stops searching of space outside of this zone
     x_hard_min = 8.0
-    x_hard_max = 15.0
+    x_hard_max = 16
     y_hard_min = 0
     y_hard_max = 5.2
 
@@ -388,6 +382,9 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     for x_real_offset in x_r_off_iter:
         for y_real_offset in y_r_off_iter:
 
+            print('x offset = %f') % x_real_offset
+            print('y offset = %f') % y_real_offset
+
             sum_current = 0
             sum_current_rect = 0
             non_zero_pixels = 0
@@ -423,12 +420,13 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
                     sum_current_rect = np.sum(conv_rect_img_array)
 
-                    # convolving std_dev_map with rect_mask to overcome background emission 
-                    conv_std_dev_img_array = std_dev_map * rect_mask
+                    # convolving std_dev_map with chip_mask 
+                    conv_std_dev_img_array = std_dev_map * chip_mask
 
-                    sum_current_std_dev = np.sum(conv_std_dev_img_array)
+                    # convert to non zero pix count!!
+                    sum_current_std_dev = np.count_nonzero(conv_std_dev_img_array)
 
-                    print(sum_current_std_dev)
+                    print('%d non zero std dev pixels') % sum_current_std_dev
 
 
             ind_x = index(x_real_offset, x_r_off_min, real_trans_step_x)
@@ -438,7 +436,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
             # edit for different weighting!
             #sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 15000.0) * sum_current + (1.0 / 200) * sum_current_std_dev
-            sums_omni[ind_x, ind_y] = non_zero_pixels + (1.0 / 200) * sum_current_std_dev
+            sums_omni[ind_x, ind_y] = non_zero_pixels + sum_current_std_dev
 
             print('sum current = %f') % sums[ind_x, ind_y]
             print('sum_omni = %f') % sums_omni[ind_x, ind_y]
@@ -473,6 +471,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         img = Image.fromarray(np.uint8(img_array))
         #img.show()
         img.save('./images/type1_fit.png')
+
 
     elif(sweep_type == 0):
 
@@ -628,7 +627,7 @@ def meta_sweep(filename, filename_out):
             y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
 
 
-    i_list = read_out(img_array, cell_real_size, \
+    i_list = read_out(img_array_perm, cell_real_size, \
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
 
     np.savetxt(filename_out, i_list)

@@ -5,8 +5,9 @@ from numba import jit
 import cv2
 
 """
-This script takes the local standard deviation of an image and saves it to
-a new one. 
+This script takes the local standard deviation of an image and thresholds it,
+removing spurious emission from the edge of sample holder and small flecks of
+dirt on the sample chip
 """
 
 def main(filename, box_size):
@@ -55,11 +56,11 @@ def main(filename, box_size):
 
 	for i in xrange(0, cnts_number):
 		# if contour is bad draw to mask
-		if(is_contour_bad(cnts, i, hierarchy)):
+		if(is_contour_bad(cnts, i, hierarchy) != 0):
 			cv2.drawContours(mask, [cnts[i]], -1, (0, 0, 0), -1)
 	
 	for i in xrange(0, cnts_number):
-		# if contour is good draw revert mask back to original state over shape area
+		# if contour is good revert mask back to original state over shape area
 		if(is_contour_bad(cnts, i, hierarchy) == 0):
 			cv2.drawContours(mask, [cnts[i]], -1, (1, 1, 1), -1)
 
@@ -99,16 +100,28 @@ def process(img, box_length, box_size, x_pix_max, y_pix_max):
 
 	return std_dev_map
 
+
 # returns 1 for bad contour and 0 for good contour
 def is_contour_bad(cnts, i, hierarchy):
 	area = cv2.contourArea(cnts[i])
 	length = cv2.arcLength(cnts[i], True)
 	extension = 0
 
+	shape = np.shape(cnts)
+	cnts_number = shape[0]
+
+	area = cv2.contourArea(cnts[i])
+
+#	if(area >= 10000):
+#		print('inloop')
+#		for i_h in xrange(0, cnts_number):
+#			if((i == hierarchy[0][i_h][3]) & (i != i_h)):
+#				area = area - cv2.contourArea(cnts[i_h])
+
 	if(area != 0):
 		extension = ((length / 4) ** 2) / area
 
-	if((length >= 700) & (area <= 1000000)):
+	if((length >= 700) & (area >= 8000)):
 		return 1
 	elif(extension >= 10):
 		return 1
