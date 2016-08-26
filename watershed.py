@@ -325,8 +325,12 @@ def main(filename, C, flag='-n'):
 		#image.save(filename)
 		#print('image saved to disk')
 
-		cv2.imshow('city block centres', thresh_perm)
-		#cv2.imshow('city block centres', open_cv_image)
+		#cv2.imshow('city block centres', thresh_perm)
+		cv2.imshow('city block centres', open_cv_image)
+
+		# loading array into image and saving
+		image_out = Image.fromarray(np.uint8(open_cv_image))
+		image_out.save('./images/rect_fit.png')
 
 		if cv2.waitKey(0) & 0xff == 27:
 		    cv2.destroyAllWindows()

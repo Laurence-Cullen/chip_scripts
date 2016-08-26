@@ -22,24 +22,19 @@ def main(filename, box_size):
 	box_length = (2 * box_size) + 1
 
 	std_dev_map = process(img, box_length, box_size, x_pix_max, y_pix_max)
-
 	std_dev_map = np.asarray(std_dev_map)
-
 	std_dev_map = np.uint8(std_dev_map)
 
 	thresh = np.zeros((x_pix_max, y_pix_max))
-
 	thresh_value = np.percentile(std_dev_map, 78)
 
 	std_dev_map[std_dev_map >= thresh_value] = 255
 	std_dev_map[std_dev_map < thresh_value] = 0
 
 	std_dev_map = np.uint8(std_dev_map / 255)
-
 	std_dev_img = Image.fromarray(np.uint8(std_dev_map * 255))
 
 	filename_out = ('./images/std_dev_map_pre.png')
-
   	std_dev_img.save(filename_out)
 
 	mask = np.ones(std_dev_map.shape, dtype='uint8')
@@ -51,7 +46,6 @@ def main(filename, box_size):
 	(cnts, hierarchy) = cv2.findContours(std_dev_map, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
 
 	shape = np.shape(cnts)
-
 	cnts_number = shape[0]
 
 	for i in xrange(0, cnts_number):
@@ -67,9 +61,7 @@ def main(filename, box_size):
 	std_dev_map = thresh_perm * mask
 
 	std_dev_img = Image.fromarray(np.uint8(std_dev_map * 255))
-
 	filename_out = ('./images/std_dev_map_post.png')
-
   	std_dev_img.save(filename_out)
   	print('standard deviation map saved')
 

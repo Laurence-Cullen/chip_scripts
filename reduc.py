@@ -405,8 +405,6 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
                 # ensure a good city block match
                 if(sweep_type == 1):
 
-                    print('beginning sweep type 1')
-
                     # convolving chip mask convolved image with known city block mask
                     conv_rect_img_array = chip_conv_img_array * rect_mask
 
@@ -443,16 +441,11 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     
     if(sweep_type == 1):
 
-        print('determining best fit from sweep type 1')
-
         # returns the indicies of the sums element with the highest value 
         i, j = np.unravel_index(sums_omni.argmax(), sums_omni.shape)
-
         print(i, j)
-
         x_real_offset = de_index(i, x_r_off_min, real_trans_step_x)
         y_real_offset = de_index(j, y_r_off_min, real_trans_step_y)
-
 
         print('%f pixels per mm, x offset of %f mm and y offset of %f mm') % \
             (pix_scale, x_real_offset, y_real_offset)
@@ -461,17 +454,11 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
 
-        print('finished chip generation')
-
         img_array = img_array * chip_mask * rect_mask
-
-        print('img array convolved ')
 
         # loading array into image and saving
         img = Image.fromarray(np.uint8(img_array))
-        #img.show()
         img.save('./images/type1_fit.png')
-
 
     elif(sweep_type == 0):
 
@@ -493,42 +480,31 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
         chip_mask = chip_mask_gen(y_pix_max, x_pix_max, cell_real_size, x_real_offset, \
             y_real_offset, pix_scale, theta, X, Y, Z)
 
-        print('after chip mask')
-
         img_array = img_array * chip_mask
 
-        print('after image convolution')
-
         img = Image.fromarray(np.uint8(img_array))
-        #img.show()
-        
         img.save('./images/type0_fit.png')
-
         print('image saved')
 
     # returns best fit mask generation parameters and image data
     return img_array, pix_scale, x_real_offset, y_real_offset, theta
 
+
 @jit
 def meta_sweep(filename, filename_out):
 
-    X, Y, Z = visual_map.main() # get real space position of cells on chip
-
     # opening image and converting to greyscale
     img_array = np.asarray(Image.open(filename).convert('L'))
-
-    # making array readable
-    img_array.flags.writeable = True
+    img_array.flags.writeable = True # making array readable
 
     X, Y, Z = visual_map.main() # get real space position of cells on chip
-
     Z[Z == 2] = 0
     Z[Z == 7] = 0
     Z[Z == 4] = 1
 
     # get fitting information from feature recognition code
     # format of angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
-    # getting fit which gives lowest pixel scale and angle erro
+    # getting fit which gives lowest pixel scale and angle error
     data, cent_cords_null, good_rect_log_null = watershed.error_minimize(filename, 0)
 
     # getting fit which yields highest number of rectangles
@@ -539,10 +515,8 @@ def meta_sweep(filename, filename_out):
 
     print('theta = %f rads') % theta
     print('pix scale = %f pixels per mm') % pix_scale
-
-    real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
+    
     std_dev_box_size = 2
-
     std_dev_map = variance_map.main(filename, std_dev_box_size)
 
     img_shape = np.shape(img_array)
@@ -550,6 +524,7 @@ def meta_sweep(filename, filename_out):
     x_pix_max = img_shape[1]
     y_pix_max = img_shape[0]
 
+    real_circ_rad = 1.05 # radius of circle around identified rectangles to be masked (mm)
     rect_mask = rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect_log, cent_cords)
 
     # correcting for orientation
@@ -603,25 +578,14 @@ def meta_sweep(filename, filename_out):
         img_array, pix_scale, x_real_offset, y_real_offset, theta = \
             sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
             sweep_data[sweep_num - 1][1], sweep_data[sweep_num -1][2], cell_real_size, \
-            X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
+            X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask,
             pix_scale, theta, std_dev_map, sweep_type)
 
         print('after sweep of sweep_num %d of sweep_type %d') % (sweep_num, sweep_type)
 
-        # BEWARE CAUSING SEGFAULT!
-
-#################################################################
-
-        #i_list = read_out(img_array, cell_real_size, \
-        #x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
-        #np.savetxt(filename_out, i_list)
-        #print('i_list.txt saved')
-
-#################################################################
-
         if(sweep_num <= sweep_num_max - 2 ):
-            x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
-            x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1] 
+            x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1]
+            x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1]
 
             y_r_off_min = y_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
             y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
@@ -634,7 +598,7 @@ def meta_sweep(filename, filename_out):
 
     print('i_list.txt saved')
 
-    return img_array, pix_scale, x_real_offset, y_real_offset, theta
+    return img_array, pix_scale, x_real_offset, y_real_offset, theta, i_list
 
 
 @jit
@@ -698,7 +662,6 @@ def read_out(img_array, cell_real_size, \
     return i_list
 
 
-# !!!!!!!!!!!!!! sometimes segfaults!
 #@jit(nopython=True)
 def read_out_crunch(img_array, cell_real_size, \
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z):
