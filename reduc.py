@@ -329,7 +329,7 @@ def smart_img_clean(rect_mask, img_array, x_pix_max, y_pix_max):
 @jit
 def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     real_trans_step_x, real_trans_step_y, cell_real_size, \
-    X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask, 
+    X, Y, Z, cent_cords, good_rect_log, img_array, rect_mask,
     pix_scale, theta, std_dev_map, sweep_type=0):
 
     print('in sweep')
@@ -466,7 +466,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
 
         print('determining best fit from sweep type 0')
 
-        # returns the indicies of the sums element with the highest value 
+        # returns the indicies of the sums element with the highest value
         i, j = np.unravel_index(sums.argmax(), sums.shape)
 
         x_real_offset = de_index(i, x_r_off_min, real_trans_step_x)
@@ -598,7 +598,7 @@ def meta_sweep(filename, filename_out):
 
     print('i_list.txt saved')
 
-    return img_array, pix_scale, x_real_offset, y_real_offset, theta, i_list
+    return img_array, pix_scale, x_real_offset, y_real_offset, theta
 
 
 @jit

@@ -19,10 +19,10 @@ def main(pre_load_log_filename, post_load_log_filename, plot_save_path):
     post_length = np.size(intensity_log_post_load)
 
     if(pre_length != j_max * 2):
-        print('pre load file is incorrect length, should contain %d elements') % j_max 
+        print('pre load file is incorrect length, should contain %d elements') % j_max
         return 0
     if(post_length != j_max * 2):
-        print('post load file is incorrect length, should contain %d elements') % j_max 
+        print('post load file is incorrect length, should contain %d elements') % j_max
         return 0
 
     relative_intensity_log = intensity_log_post_load / intensity_log_pre_load
