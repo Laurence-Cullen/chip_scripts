@@ -1,0 +1,16 @@
+
+real	22m3.570s
+user	0m17.643s
+sys	0m5.525s
+Traceback (most recent call last):
+  File "/dls/science/groups/scisoft/DIALS/CD/nightly/dials-dev20160908/build/../modules/dials/command_line/find_spots_client.py", line 182, in <module>
+    stopped = stop(params.host, params.port, params.nproc)
+  File "/dls/science/groups/scisoft/DIALS/CD/nightly/dials-dev20160908/build/../modules/dials/command_line/find_spots_client.py", line 131, in stop
+    response = conn.getresponse()
+  File "/dls/science/groups/scisoft/DIALS/CD/nightly/dials-dev20160908/base/lib/python2.7/httplib.py", line 1067, in getresponse
+    response.begin()
+  File "/dls/science/groups/scisoft/DIALS/CD/nightly/dials-dev20160908/base/lib/python2.7/httplib.py", line 409, in begin
+    version, status, reason = self._read_status()
+  File "/dls/science/groups/scisoft/DIALS/CD/nightly/dials-dev20160908/base/lib/python2.7/httplib.py", line 373, in _read_status
+    raise BadStatusLine(line)
+httplib.BadStatusLine: ''
