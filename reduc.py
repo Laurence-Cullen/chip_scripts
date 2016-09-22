@@ -490,7 +490,8 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, \
     return img_array, pix_scale, x_real_offset, y_real_offset, theta
 
 
-@jit
+
+# 
 def meta_sweep(filename, filename_out):
 
     # opening image and converting to greyscale
@@ -559,7 +560,6 @@ def meta_sweep(filename, filename_out):
     # loading sweep pattern
     sweep_data = sweep_pattern(sweep_num_max)
 
-
     for sweep_num in xrange(1, sweep_num_max):
         sweep_type = 0
         print('sweep number = %d') % sweep_num
@@ -583,7 +583,7 @@ def meta_sweep(filename, filename_out):
 
         print('after sweep of sweep_num %d of sweep_type %d') % (sweep_num, sweep_type)
 
-        if(sweep_num <= sweep_num_max - 2 ):
+        if(sweep_num <= sweep_num_max - 2):
             x_r_off_min = x_real_offset - sweep_data[sweep_num][0] * sweep_data[sweep_num][1]
             x_r_off_max = x_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][1]
 
@@ -591,10 +591,15 @@ def meta_sweep(filename, filename_out):
             y_r_off_max = y_real_offset + sweep_data[sweep_num][0] * sweep_data[sweep_num][2]
 
 
+
+    fit_params = (img_array_perm, cell_real_size, x_real_offset, y_real_offset,\
+        pix_scale, theta, X, Y, Z)
+
     i_list = read_out(img_array_perm, cell_real_size, \
     x_real_offset, y_real_offset, pix_scale, theta, X, Y, Z)
 
     np.savetxt(filename_out, i_list)
+
 
     print('i_list.txt saved')
 

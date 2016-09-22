@@ -4,28 +4,27 @@ import os, re, sys
 import time, math, string
 from matplotlib import pyplot as plt
 
-def main(pre_load_log_filename, post_load_log_filename, plot_save_path):
+def main(off_zero_frame_file, on_zero_frame_file, plot_save_path):
 
-    intensity_log_pre_load = np.loadtxt(pre_load_log_filename)
-    intensity_log_post_load = np.loadtxt(post_load_log_filename)
+    off_zero_frame_load = np.loadtxt(off_zero_frame_file)
+    on_zero_frame_load = np.loadtxt(on_zero_frame_file)
 
-    intensity_log_pre_load = intensity_log_pre_load / np.mean(intensity_log_pre_load)
-    intensity_log_post_load = intensity_log_post_load / np.mean(intensity_log_post_load)
+    off_zero_frame_load = negative_frame_load / np.mean(off_zero_frame_load)
+    on_zero_frame_load = zero_frame_load / np.mean(on_zero_frame_load)
 
     j_max = 11664
 
-    pre_length = np.size(intensity_log_pre_load)
-
-    post_length = np.size(intensity_log_post_load)
-
-    if(pre_length != j_max * 2):
-        print('pre load file is incorrect length, should contain %d elements') % j_max
+    off_zero_length = np.size(off_zero_frame_load)
+    on_zero_length = np.size(on_zero_frame_load)
+    
+    if(off_zero_length != j_max * 2):
+        print('off zero frame file is incorrect length, should contain %d elements') % j_max
         return 0
-    if(post_length != j_max * 2):
-        print('post load file is incorrect length, should contain %d elements') % j_max
+    if(on_zero_length != j_max * 2):
+        print('on zero frame file is incorrect length, should contain %d elements') % j_max
         return 0
 
-    relative_intensity_log = intensity_log_post_load / intensity_log_pre_load
+    crystal_strength_log = on_zero_frame_file
 
     x_list, y_list, z_list = [], [], []
     # [addr] = i, [i] = addr 
@@ -38,7 +37,7 @@ def main(pre_load_log_filename, post_load_log_filename, plot_save_path):
         addr = normal_ordr_dict[j]
         x, y = visual_map.get_xy(addr)
         
-        if(relative_intensity_log[j][0] >= 3):
+        if(crystal_strength_log[j][0] >= 10):
             z = 0
         else:
             z = relative_intensity_log[j][0]

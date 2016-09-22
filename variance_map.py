@@ -43,7 +43,8 @@ def main(filename, box_size):
 	thresh_perm = np.copy(std_dev_map)
 
 	# find array of contours
-	(cnts, hierarchy) = cv2.findContours(std_dev_map, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+	(cnts, hierarchy) = cv2.findContours(std_dev_map, cv2.RETR_CCOMP,\
+		cv2.CHAIN_APPROX_SIMPLE)
 
 	shape = np.shape(cnts)
 	cnts_number = shape[0]

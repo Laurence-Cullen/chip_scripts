@@ -325,10 +325,14 @@ def main(filename, C, flag='-n'):
 		#image.save(filename)
 		#print('image saved to disk')
 
-		#cv2.imshow('city block centres', thresh_perm)
-		cv2.imshow('city block centres', open_cv_image)
+		cv2.imshow('city block centres', thresh_perm)
+		#cv2.imshow('city block centres', open_cv_image)
 
-		# loading array into image and saving
+		# saving threshold binarisation
+		image_out = Image.fromarray(np.uint8(thresh_perm))
+		image_out.save('./images/adapt_thresh.png')
+
+		# saving fitted rectangles
 		image_out = Image.fromarray(np.uint8(open_cv_image))
 		image_out.save('./images/rect_fit.png')
 
