@@ -19,7 +19,7 @@ fi
 
 # checks that input file is of the correct type
 if [[ ! $2 == *.out ]]; then
-	echo 'incorrect file type, second arguement must be a .out file'
+	echo 'incorrect file type, second argument must be a .out file'
 	exit
 fi
 

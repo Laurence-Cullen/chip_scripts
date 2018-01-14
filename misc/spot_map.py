@@ -23,10 +23,10 @@ for line in xrange(0, num_lines):
 
     i = int(filename[-9:-4])
 
-    if(sys.argv[1] == '-s'):
+    if sys.argv[1] == '-s':
         info_log[i] = int(line_content[1])
 
-    if(sys.argv[1] == '-i'):
+    if sys.argv[1] == '-i':
         info_log[i] = line_content[1]
 
 #for i in xrange(0,num_lines):

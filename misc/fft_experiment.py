@@ -11,7 +11,7 @@ def fourier_mask(shape):
     x_pix = int(shape[0])
     y_pix = int(shape[1])
 
-    print('input image has dimensions of x = %d and y = %d') % (x_pix, y_pix)
+    print('input image has dimensions of x = %d and y = %d' % (x_pix, y_pix))
 
     # set size of mask (circular shape)
     mask_inner_radius = x_pix / 13
@@ -29,7 +29,7 @@ def fourier_mask(shape):
 
             # setting circular region larger than mask_inner_radius and less than
             # mask_outer_radius to 1, all other regions of array left at 0
-            if ((r > mask_inner_radius) & (r < mask_outer_radius)):
+            if (r > mask_inner_radius) & (r < mask_outer_radius):
                 f_mask[x][y] = 1
 
     # mask saved as image for debugging purposes, maybe remove?
@@ -54,12 +54,12 @@ def threshold_tweak(ftrans, max_peak, peaks):
         # print('%d non zero pixels detected at threshold of %f %% of peak value') \
         # % (np.count_nonzero(ftrans_temp), thresh * 100)
 
-        if (np.count_nonzero(ftrans_temp) == peaks):
+        if np.count_nonzero(ftrans_temp) == peaks:
             print('%d peaks found when the threshhold = %f %% of the max peak \
                 intensity') % (peaks, thresh * 100)
             return ftrans_temp
 
-        if (np.count_nonzero(ftrans_temp) < peaks):
+        if np.count_nonzero(ftrans_temp) < peaks:
             print('threshold iteration has skipped over %d peak values, try again \
                 with a finer threshold step') % peaks
 
@@ -78,8 +78,8 @@ def find_angle(clean_fft, peaks):
     for peak in xrange(0, peaks):
         args[peak] = np.unravel_index(np.argmax(clean_fft), np.shape(clean_fft))
 
-        print('peak %d has intensity of %f') % (peak + 1, np.amax(clean_fft))
-        print('and position of [%d, %d]') % (args[peak][0], args[peak][1])
+        print('peak %d has intensity of %f' % (peak + 1, np.amax(clean_fft)))
+        print('and position of [%d, %d]' % (args[peak][0], args[peak][1]))
 
         clean_fft[int(args[peak][0])][int(args[peak][1])] = 0
 
@@ -91,7 +91,7 @@ def find_angle(clean_fft, peaks):
     # finding magnitude of vector
     vec_mag = math.sqrt(vector[0] ** 2 + vector[1] ** 2)
 
-    print('vec_mag = %f') % vec_mag
+    print('vec_mag = %f' % vec_mag)
 
     # setting reference vertical vector
     vert_vect = np.array([0, 1])
@@ -100,7 +100,7 @@ def find_angle(clean_fft, peaks):
     angle = vector_angle(vector, vert_vect)
 
     deg_angle = angle * 360 / (2 * math.pi)
-    print('angle = %f degrees before quadrant correction') % deg_angle
+    print('angle = %f degrees before quadrant correction' % deg_angle)
 
     # finding quadrant in which the calculated angle is closest to reference values of
     # 0, pi/2, pi and (3 * pi) / 4
@@ -115,7 +115,7 @@ def find_angle(clean_fft, peaks):
     angle = quadrant_delta[quadrant]
 
     deg_angle = angle * 360 / (2 * math.pi)
-    print('chip is rotated  %f degrees counter clockwise') % deg_angle
+    print('chip is rotated  %f degrees counter clockwise' % deg_angle)
 
     return angle, vec_mag
 
