@@ -289,6 +289,7 @@ def main(filename, c, flag='-p'):
     angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err = \
         output(pix_scale_omni, angle_omni)
 
+    # TODO create high performance file saving compromise
     # if -p is given as a flag output is printed
     if flag == '-p':
 
