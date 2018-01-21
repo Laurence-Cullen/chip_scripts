@@ -103,9 +103,9 @@ def rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect
                 if good_rect_log[count] == 1:
                     if math.sqrt(x ** 2 + y ** 2) <= pix_circ_rad:
 
-                        if (cent_cords[count][0] + x >= 0) and (cent_cords[count][0] + x < x_pix_max) \
-                                and (cent_cords[count][1] + y >= 0) and (cent_cords[count][1] + y < y_pix_max):
-                            mask[cent_cords[count][0] + x][cent_cords[count][1] + y] = 1.0
+                        if (cent_cords[count][1] + x >= 0) and (cent_cords[count][1] + x < x_pix_max) \
+                                and (cent_cords[count][0] + y >= 0) and (cent_cords[count][0] + y < y_pix_max):
+                            mask[cent_cords[count][1] + x][cent_cords[count][0] + y] = 1.0
 
     return mask
 
@@ -191,7 +191,7 @@ def sweep(filename, x_r_off_min, x_r_off_max, y_r_off_min, y_r_off_max, real_tra
                 # ensure a good city block match
                 if sweep_type == 1:
                     # convolving chip mask convolved image with known city block mask
-                    conv_rect_img_array = chip_conv_img_array * np.transpose(rect_mask)
+                    conv_rect_img_array = chip_conv_img_array * rect_mask
 
                     non_zero_pixels = np.count_nonzero(conv_rect_img_array)
                     print('%d non zero pixels' % non_zero_pixels)
@@ -277,10 +277,10 @@ def meta_sweep(filename, filename_out):
     # get fitting information from feature recognition code
     # format of angle_mean, angle_std_err, pix_scale_mean, pix_scale_std_err, count
     # getting fit which gives lowest pixel scale and angle error
-    data, cent_cords_null, good_rect_log_null = watershed.error_minimize(filename, 0)
+    data, cent_cords_null, good_rect_log_null = watershed.error_minimize(filename, mode=0)
 
     # getting fit which yields highest number of rectangles
-    data_null, cent_cords, good_rect_log = watershed.error_minimize(filename, 1)
+    data_null, cent_cords, good_rect_log = watershed.error_minimize(filename, mode=1)
 
     theta = - math.radians(data[0])
     pix_scale = data[2]
@@ -299,8 +299,8 @@ def meta_sweep(filename, filename_out):
     rect_mask = rect_cent_mask_gen(x_pix_max, y_pix_max, pix_scale, real_circ_rad, good_rect_log, cent_cords)
 
     # correcting for orientation
-    rect_mask = np.flipud(rect_mask)
-    rect_mask = np.rot90(rect_mask, 3)
+    # rect_mask = np.flipud(rect_mask)
+    # rect_mask = np.rot90(rect_mask, 3)
 
     # loading array into image and saving
     rect_mask_img = Image.fromarray(np.uint8(rect_mask * 200))
@@ -311,7 +311,7 @@ def meta_sweep(filename, filename_out):
     print('rect_mask shape = %s, img_array shape = %s' % (str(np.shape(rect_mask)), str(np.shape(img_array))))
 
     # masking img_array with the fitted city block rectangles
-    img_array_perm = mask_image(rect_mask, np.transpose(img_array))
+    img_array_perm = mask_image(rect_mask, img_array)
 
     print('completed image masking')
 

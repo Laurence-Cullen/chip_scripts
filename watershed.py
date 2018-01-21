@@ -175,7 +175,7 @@ def main(filename, c, flag='-p'):
     areas = np.zeros(length)
     side_lengths = np.zeros((length, 4))
 
-    cent_cords = [0, 0]
+    cent_cords = []
 
     # cent_cords = np.zeros((length, 2))
     side_ratio = np.zeros(length)
@@ -228,12 +228,10 @@ def main(filename, c, flag='-p'):
                 cent_cords_x = box[0][0] - delt_x
                 cent_cords_y = box[0][1] - delt_y
 
-                cent_cords_vec = [cent_cords_x, cent_cords_y]
+                cent_cords.append((cent_cords_x, cent_cords_y))
 
-                cent_cords = np.vstack((cent_cords, cent_cords_vec))
-
-                cv2.circle(open_cv_image, (int(cent_cords[count][0]),
-                                           int(cent_cords[count][1])), 40, (b * 255, g * 255, r * 255), 2)
+                cv2.circle(open_cv_image, (int(cent_cords_x),
+                                           int(cent_cords_y)), 40, (b * 255, g * 255, r * 255), 2)
 
                 # cv2.drawContours(open_cv_image,[box],0,(0,0,255),2)
 
